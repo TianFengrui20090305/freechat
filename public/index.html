@@ -1,19 +1,87 @@
 <!doctype html>
-<html lang="en">
-	<head>
-		<meta charset="UTF-8" />
-		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-		<title>Hello, World!</title>
-	</head>
-	<body>
-		<h1 id="heading"></h1>
-		<script>
-			fetch('/message')
-				.then((resp) => resp.text())
-				.then((text) => {
-					const h1 = document.getElementById('heading');
-					h1.textContent = text;
-				});
-		</script>
-	</body>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Durable Object 逻辑测试</title>
+    <style>
+      body {
+        font-family: sans-serif;
+        max-width: 600px;
+        margin: 20px auto;
+        padding: 0 10px;
+      }
+      #chat {
+        height: 300px;
+        border: 1px solid #ccc;
+        overflow-y: scroll;
+        padding: 10px;
+        margin-bottom: 10px;
+        background: #f9f9f9;
+      }
+      .msg {
+        margin-bottom: 8px;
+        border-bottom: 1px dashed #eee;
+        padding-bottom: 4px;
+      }
+      .pending {
+        color: #999;
+        font-style: italic;
+      }
+      .system {
+        color: #007bff;
+        font-weight: bold;
+      }
+    </style>
+  </head>
+  <body>
+    <h2>Chat Test (DO + Alarm)</h2>
+    <div id="chat"></div>
+    <input type="text" id="ipt" placeholder="输入消息..." style="width: 70%" />
+    <button onclick="send()">发送</button>
+
+    <script>
+      const chat = document.getElementById("chat");
+      const ipt = document.getElementById("ipt");
+
+      // 这里的 URL 对应你 Hono 的路由：/ws/:roomId
+      const roomId = "room1";
+      const userId = "user_" + Math.floor(Math.random() * 1000);
+      const ws = new WebSocket(`ws://${location.host}/ws/${roomId}`);
+
+      ws.onopen = () => appendLog("系统", "已连接到服务器", "system");
+      ws.onclose = () => appendLog("系统", "连接已断开", "system");
+
+      ws.onmessage = (e) => {
+        const data = JSON.parse(e.data);
+        if (data.type === "msg") {
+          appendLog(data.username || data.userId, data.content, data.status);
+        }
+      };
+
+      function send() {
+        if (!ipt.value) return;
+        const payload = {
+          userId: userId,
+          username: "访客" + userId.split("_")[1],
+          content: ipt.value,
+        };
+        ws.send(JSON.stringify(payload));
+        ipt.value = "";
+      }
+
+      function appendLog(user, content, status) {
+        const div = document.createElement("div");
+        div.className = "msg" + (status === "pending" ? " pending" : "");
+        div.innerHTML = `<strong>${user}:</strong> ${content} ${status === "pending" ? "(同步中...)" : ""}`;
+        chat.appendChild(div);
+        chat.scrollTop = chat.scrollHeight;
+      }
+
+      // 支持回车发送
+      ipt.onkeydown = (e) => {
+        if (e.key === "Enter") send();
+      };
+    </script>
+  </body>
 </html>
