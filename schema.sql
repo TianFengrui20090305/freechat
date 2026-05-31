@@ -102,6 +102,7 @@ CREATE TABLE IF NOT EXISTS user_relationships (
   owner_user_id TEXT NOT NULL,
   target_user_id TEXT NOT NULL,
   remark_name TEXT DEFAULT '',
+  tags TEXT NOT NULL DEFAULT '[]',
   is_blocked INTEGER NOT NULL DEFAULT 0,
   is_muted INTEGER NOT NULL DEFAULT 0,
   is_favorite INTEGER NOT NULL DEFAULT 0,

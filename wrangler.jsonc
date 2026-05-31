@@ -13,6 +13,18 @@
   },
   "observability": {
     "enabled": true,
+    "head_sampling_rate": 1,
+    "logs": {
+      "enabled": true,
+      "head_sampling_rate": 1,
+      "persist": true,
+      "invocation_logs": true,
+    },
+    "traces": {
+      "enabled": true,
+      "persist": true,
+      "head_sampling_rate": 1,
+    },
   },
   "upload_source_maps": true,
   "compatibility_flags": ["nodejs_compat"],
@@ -20,7 +32,7 @@
     {
       "binding": "freechat_db",
       "database_name": "freechat_db",
-      "database_id": "",
+      "database_id": "00000000-0000-0000-0000-000000000000",
     },
   ],
   "durable_objects": {
@@ -40,7 +52,7 @@
   "vars": {
     "MAX_FILE_SIZE": "20971520",
     "ALLOW_REG": "true",
-    "REG_INVCODE_REQUIRED": "true",
+    "REG_INVCODE_REQUIRED": "false",
     "MAX_ROOM_USERS": "1000",
     "MSG_OPERATION_TIME": "180",
     "MSG_ROOM_MAX_LENGTH": "1000",

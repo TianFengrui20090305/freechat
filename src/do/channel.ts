@@ -5,27 +5,39 @@ export abstract class ChatInstance implements DurableObject {
   private state: DurableObjectState;
   private env: any;
   private mode: "pvt" | "room";
+  private channelId: string;
   private config: {
     prefix: string;
     table: string;
   };
 
   constructor(state: DurableObjectState, env: any) {
-    const id = state.id.toString();
-
     this.state = state;
     this.env = env;
-    this.mode = id.includes("pvt") ? "pvt" : "room";
-
+    this.mode = "room";
+    this.channelId = "";
     this.config = {
-      prefix: this.mode === "pvt" ? "buf_pvt_" : "buf_room_",
+      prefix: "buf_room_",
       table: "messages",
-      // table: this.mode === "pvt" ? "pvt_msg" : "room_msg",
     };
   }
 
   async fetch(request: Request): Promise<Response> {
-    return new Response("Not implemented", { status: 501 });
+    const url = new URL(request.url);
+    const channelId = url.searchParams.get("channelId") || "";
+
+    // Detect mode from channel ID prefix
+    this.channelId = channelId;
+    this.mode = channelId.startsWith("p:") ? "pvt" : "room";
+    this.config = {
+      prefix: this.mode === "pvt" ? "buf_pvt_" : "buf_room_",
+      table: "messages",
+    };
+
+    const pair = new WebSocketPair();
+    const [client, server] = Object.values(pair);
+    this.state.acceptWebSocket(server);
+    return new Response(null, { status: 101, webSocket: client });
   }
 
   // 广播消息到所有连接的客户端
@@ -54,7 +66,7 @@ export abstract class ChatInstance implements DurableObject {
       return;
     }
 
-    const chatMsg: BaseMessage = {
+    const chatMsg: BaseMessage & { channel_id?: string } = {
       id: msgId,
       userId: payload.userId,
       username: payload.username,
@@ -62,11 +74,16 @@ export abstract class ChatInstance implements DurableObject {
       timestamp: now,
       status: "pending",
       type: "text",
+      channel_id: this.channelId,
     };
 
     try {
       // 广播消息到所有连接的客户端
-      this.broadcast({ ...chatMsg });
+      this.broadcast({
+        ...chatMsg,
+        type: "msg",
+        channelId: this.channelId,
+      });
       // 将消息暂存到DO中
       await this.state.storage.put(
         `${this.config.prefix}${now}_${msgId}`,
@@ -124,13 +141,14 @@ export abstract class ChatInstance implements DurableObject {
 
       // 使用事务批量插入消息
       const stmt = this.env.DB.prepare(
-        `INSERT INTO ${tableName} (id, userId, content, createAt, editedAt, type, status) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO ${tableName} (id, channel_id, userId, content, createAt, editedAt, type, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
       );
 
       // 构建批量插入的参数数组并标记消息状态为"saved"
       const batchRequests = messages.map((msg) => {
         return stmt.bind(
           msg.id,
+          msg.channel_id || "",
           msg.userId,
           msg.content,
           msg.timestamp,
@@ -201,7 +219,11 @@ export abstract class ChatInstance implements DurableObject {
       await this.state.storage.put(bufKey, msg);
 
       // 广播编辑后的消息
-      this.broadcast({ ...msg });
+      this.broadcast({
+        ...msg,
+        type: "edited",
+        channelId: this.channelId,
+      });
       console.log(`Message ${msgId} edited in DO buffer`);
     } catch (error) {
       console.error("Error editing message:", error);

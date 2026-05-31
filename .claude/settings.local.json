@@ -1,0 +1,15 @@
+{
+  "env": {
+    "CLAUDE_CODE_USE_POWERSHELL_TOOL": "1"
+  },
+  "permissions": {
+    "allow": [
+      "Skill(brainstorming)",
+      "Skill(brainstorming:*)",
+      "Bash(\"C:\\\\Users\\\\hi\\\\.claude\\\\skills\\\\brainstorming\\\\scripts\\\\start-server.sh\" --project-dir \"f:\\\\IsFreeAh\\\\cf\\\\freechat\")",
+      "Bash(sleep 3 && ls \"f:/.superpowers/brainstorm/\" 2>/dev/null || ls \"f:/IsFreeAh/cf/freechat/.superpowers/brainstorm/\" 2>/dev/null || echo \"checking project dir\" && find \"f:/IsFreeAh/cf/freechat\" -path \"*/.superpowers/*\" -name \"server-info\" 2>/dev/null | head -5)",
+      "Read(//f/.superpowers/**)",
+      "Bash(npx tsc *)"
+    ]
+  }
+}

@@ -36,5 +36,9 @@ lerna-debug.log*
 !.dev.vars.example
 !.env.example
 
+# brainstorm mockups
+.superpowers/
+
 # custom
 CLAUDE.md
+docs/*

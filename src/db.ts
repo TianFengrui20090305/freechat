@@ -1,3 +1,5 @@
+import { type User, type PublicUser } from "./models";
+
 async function hashPassword(
   user: { salt: string },
   clientHash: string,
@@ -116,4 +118,119 @@ export async function registerUser(
   }
 
   return { success: true, msg: "注册成功", content: {} };
+}
+
+export async function getUserById(
+  db: D1Database,
+  id: string,
+): Promise<User | null> {
+  const user = await db
+    .prepare(
+      "SELECT id, username, avatar_id, bio, invcode_id, is_disabled, createdAt, updatedAt, deletedAt FROM users WHERE id = ?",
+    )
+    .bind(id)
+    .first<User>();
+  return user || null;
+}
+
+export async function getPublicUser(
+  db: D1Database,
+  id: string,
+): Promise<PublicUser | null> {
+  const user = await db
+    .prepare(
+      "SELECT id, username, avatar_id, bio, createdAt FROM users WHERE id = ?",
+    )
+    .bind(id)
+    .first<PublicUser>();
+  return user || null;
+}
+
+export async function updateUser(
+  db: D1Database,
+  id: string,
+  data: { username?: string; bio?: string; avatar_id?: string },
+): Promise<{ success: boolean; msg: string }> {
+  const fields: string[] = [];
+  const values: (string | number)[] = [];
+
+  if (data.username !== undefined) {
+    fields.push("username = ?");
+    values.push(data.username);
+  }
+  if (data.bio !== undefined) {
+    fields.push("bio = ?");
+    values.push(data.bio);
+  }
+  if (data.avatar_id !== undefined) {
+    fields.push("avatar_id = ?");
+    values.push(data.avatar_id);
+  }
+
+  if (fields.length === 0) {
+    return { success: false, msg: "没有需要更新的字段" };
+  }
+
+  fields.push("updatedAt = strftime('%s', 'now')");
+
+  try {
+    await db
+      .prepare(`UPDATE users SET ${fields.join(", ")} WHERE id = ?`)
+      .bind(...values, id)
+      .run();
+    return { success: true, msg: "更新成功" };
+  } catch (error) {
+    console.error("Error updating user:", error);
+    return { success: false, msg: "更新失败" };
+  }
+}
+
+export async function getUserSettings(
+  db: D1Database,
+  userId: string,
+): Promise<Record<string, string>> {
+  const rows = await db
+    .prepare(
+      "SELECT setting_key, setting_value FROM user_settings WHERE user_id = ?",
+    )
+    .bind(userId)
+    .all<{ setting_key: string; setting_value: string }>();
+
+  const settings: Record<string, string> = {};
+  for (const row of rows.results) {
+    settings[row.setting_key] = row.setting_value;
+  }
+  return settings;
+}
+
+export async function upsertUserSetting(
+  db: D1Database,
+  userId: string,
+  key: string,
+  value: string,
+): Promise<void> {
+  await db
+    .prepare(
+      "INSERT INTO user_settings (user_id, setting_key, setting_value) VALUES (?, ?, ?) ON CONFLICT(user_id, setting_key) DO UPDATE SET setting_value = ?",
+    )
+    .bind(userId, key, value, value)
+    .run();
+}
+
+export async function getMyProfile(db: D1Database, userId: string) {
+  const profile = await db
+    .prepare(
+      "SELECT id, username, avatar_id, bio, is_disabled, createdAt, updatedAt FROM users WHERE id = ?",
+    )
+    .bind(userId)
+    .first<{
+      id: string;
+      username: string;
+      avatar_id: string;
+      bio: string;
+      is_disabled: number;
+      createdAt: number;
+      updatedAt: number;
+    }>();
+  return profile;
 }

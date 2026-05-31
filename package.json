@@ -4,13 +4,16 @@
   "scripts": {
     "dev": "wrangler dev",
     "deploy": "wrangler deploy --minify",
-    "cf-typegen": "wrangler types --env-interface CloudflareBindings"
+    "cf-typegen": "wrangler types --env-interface CloudflareBindings",
+    "fe:build": "cd public/ts && tsc -p tsconfig.json",
+    "fe:watch": "cd public/ts && tsc -p tsconfig.json --watch"
   },
   "dependencies": {
     "hono": "^4.12.18"
   },
   "devDependencies": {
     "@types/node": "^25.8.0",
+    "typescript": "^6.0.3",
     "wrangler": "^4.92.0"
   }
 }

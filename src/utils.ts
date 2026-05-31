@@ -22,6 +22,17 @@ export function validateUsername(username: string): {
   return { valid: true, msg: "" };
 }
 
+export function validateBio(bio: string): {
+  valid: boolean;
+  msg: string;
+} {
+  const len = bio?.trim().length || 0;
+  if (len > 200) {
+    return { valid: false, msg: "个人简介不能超过 200 个字符" };
+  }
+  return { valid: true, msg: "" };
+}
+
 export function validatePasswordHash(clientHash: string): {
   valid: boolean;
   msg: string;
@@ -49,28 +60,42 @@ export function validatePasswordHash(clientHash: string): {
 }
 
 export async function verifyTurnstile(
-  token: string,
-  secretKey: string,
-  remoteIp?: string,
+    token: string,
+    secretKey: string,
+    remoteIp?: string,
 ): Promise<boolean> {
-  const formData = new URLSearchParams();
-  formData.append("secret", secretKey);
-  formData.append("response", token);
-  formData.append("remoteip", remoteIp || "");
+    if (!secretKey) {
+        // 未配置 Secret Key 时跳过验证（开发环境用）
+        return true;
+    }
+    if (!token) {
+        console.error("Turnstile verification failed: empty token");
+        return false;
+    }
 
-  try {
-    const response = await fetch(
-      "https://challenges.cloudflare.com/turnstile/v0/siteverify",
-      {
-        body: formData,
-        method: "POST",
-      },
-    );
+    try {
+        const body: Record<string, string> = {
+            secret: secretKey,
+            response: token,
+        };
+        if (remoteIp) body.remoteip = remoteIp;
 
-    const data: TurnstileResponse = await response.json();
-    return data.success === true;
-  } catch (error) {
-    console.error("Error verifying Turnstile token:", error);
-    return false;
-  }
+        const response = await fetch(
+            "https://challenges.cloudflare.com/turnstile/v0/siteverify",
+            {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(body),
+            },
+        );
+
+        const data: TurnstileResponse = await response.json();
+        if (!data.success) {
+            console.error("Turnstile verification failed:", data["error-codes"]);
+        }
+        return data.success === true;
+    } catch (error) {
+        console.error("Error verifying Turnstile token:", error);
+        return false;
+    }
 }

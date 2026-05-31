@@ -1,15 +1,28 @@
 import { Hono } from "hono";
 import { createToken, verifyInvcode, verifyToken } from "./auth";
-import { verifyUser, registerUser } from "./db";
+import {
+  verifyUser,
+  registerUser,
+  getUserById,
+  getPublicUser,
+  updateUser,
+  getUserSettings,
+  upsertUserSetting,
+  getMyProfile,
+} from "./db";
 import {
   validateId,
   validateUsername,
   validatePasswordHash,
+  validateBio,
   verifyTurnstile,
 } from "./utils";
 import { isValidSession } from "./session";
 
-const app = new Hono<{ Bindings: Env }>();
+const app = new Hono<{
+  Bindings: Env;
+  Variables: { userId: string; username: string };
+}>();
 
 app.use("/api/*", async (c, next) => {
   const path = c.req.path;
@@ -36,6 +49,8 @@ app.use("/api/*", async (c, next) => {
       401,
     );
   }
+  c.set("userId", payload.userId);
+  c.set("username", payload.username);
   await next();
 });
 
@@ -143,15 +158,75 @@ app.post("/api/auth/register", async (c) => {
 //   const channelId = `${type}_${id}`;
 // });
 
-app.get("/api/user/:userId", async (c) => {});
+app.get("/api/user/:userId", async (c) => {
+  try {
+    const userId = c.req.param("userId");
+    const user = await getPublicUser(c.env.freechat_db, userId);
+    if (!user) return c.json({ success: false, msg: "用户不存在" }, 404);
+    return c.json({ success: true, content: user });
+  } catch (error) {
+    console.error("Error getting user:", error);
+    return c.json({ success: false, msg: "获取用户信息失败" }, 500);
+  }
+});
 
-app.get("/api/me", async (c) => {});
+app.get("/api/me", async (c) => {
+  try {
+    const userId = c.get("userId");
+    const profile = await getMyProfile(c.env.freechat_db, userId);
+    return c.json({ success: true, msg: "", content: profile }, 200);
+  } catch {
+    return c.json(
+      { success: false, msg: "服务器内部错误", content: null },
+      500,
+    );
+  }
+});
 
-app.patch("/api/me", async (c) => {});
+app.patch("/api/me", async (c) => {
+  try {
+    const userId = c.get("userId");
+    const body = await c.req.json();
+    const { username, bio, avatar_id } = body;
+    const result = await updateUser(c.env.freechat_db, userId, { username, bio, avatar_id });
+    if (result.success) {
+      return c.json({ success: true, msg: result.msg });
+    }
+    return c.json({ success: false, msg: result.msg }, 400);
+  } catch (error) {
+    console.error("Error updating user:", error);
+    return c.json({ success: false, msg: "更新失败" }, 500);
+  }
+});
 
-app.get("/api/me/settings", async (c) => {});
+app.get("/api/me/settings", async (c) => {
+  try {
+    const userId = c.get("userId");
+    const settings = await getUserSettings(c.env.freechat_db, userId);
+    return c.json({ success: true, content: settings });
+  } catch (error) {
+    console.error("Error getting settings:", error);
+    return c.json({ success: false, msg: "获取设置失败" }, 500);
+  }
+});
 
-app.patch("/api/me/settings", async (c) => {});
+app.patch("/api/me/settings", async (c) => {
+  try {
+    const userId = c.get("userId");
+    const body = await c.req.json();
+    for (const [key, value] of Object.entries(body)) {
+      await upsertUserSetting(c.env.freechat_db, userId, key, String(value));
+    }
+    return c.json({ success: true, msg: "设置已更新" });
+  } catch (error) {
+    console.error("Error updating settings:", error);
+    return c.json({ success: false, msg: "更新设置失败" }, 500);
+  }
+});
+
+app.get("/api/contact/:userId", async (c) => {});
+
+app.patch("/api/contact/:userId", async (c) => {});
 
 app.post("/api/file/upload", async (c) => {});
 
@@ -159,4 +234,24 @@ app.get("/api/file/:fileId", async (c) => {});
 
 app.get("/api/admin/review", async (c) => {});
 
+// WebSocket route — forward to Durable Object
+// The auth middleware doesn't apply since it only matches /api/*
+app.all("/ws/:channelId", async (c) => {
+  try {
+    const channelId = c.req.param("channelId");
+    const doId = c.env.CHAT_ROOM.idFromName(channelId);
+    const stub = c.env.CHAT_ROOM.get(doId);
+
+    // Forward channelId to the DO via query param
+    const url = new URL(c.req.url);
+    url.searchParams.set("channelId", channelId);
+    const req = new Request(url.toString(), c.req.raw);
+    return stub.fetch(req);
+  } catch (error) {
+    console.error("Error in WebSocket route:", error);
+    return new Response("Internal Server Error", { status: 500 });
+  }
+});
+
+export { ChatRoom } from "./do/channel";
 export default app;

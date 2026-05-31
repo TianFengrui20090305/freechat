@@ -3,7 +3,21 @@ export interface User {
   username: string;
   password: string;
   salt: string;
-  createdAt: string;
+  avatar_id: string;
+  bio: string;
+  invcode_id: number | null;
+  is_disabled: number;
+  createdAt: number;
+  updatedAt: number;
+  deletedAt: number | null;
+}
+
+export interface PublicUser {
+  id: string;
+  username: string;
+  avatar_id: string;
+  bio: string;
+  createdAt: number;
 }
 
 export interface BaseMessage {
